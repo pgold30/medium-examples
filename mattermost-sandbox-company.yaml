@@ -1,0 +1,408 @@
+global:
+  # Set siteUrl to the URL your users will use to access Mattermost
+  siteUrl: "https://mattermost.sandbox.mycompany.com"
+  filesAccessKey: "mattermostadmin"
+  filesSecretKey: "mattermostadmin"
+  mattermostLicense: "THIS STRING SHOULD BE REPLACED WITH THE CONTENTS OF YOUR LICENSE FILE"
+  features:
+    ingress:
+      enabled: false
+    database:
+      useInternal: false
+      internal:
+        dbUser: "mattermosthelm"
+        dbPassword: "mysecretpass"
+        dbName: "mattermosthelm"
+      external:
+        driver: "mysql"
+        dataSource: "mattermosthelm:mysecretpass@tcp(rdsendpoint:3306)/mattermosthelm?charset=utf8mb4,utf8&readTimeout=30s&writeTimeout=30s"
+        dataSourceReplicas:
+    elasticsearch:
+      enabled: false
+    loadTest:
+      enabled: false
+      image:
+        repository: mattermost/mattermost-loadtest
+        tag: latest
+        pullPolicy: Always
+      replicaCount: 1
+      numTeams: 1
+      numChannelsPerTeam: 400
+      numUsers: 5
+      numPosts: 200
+      numEmoji: 2000
+      replyChance: 0.3
+      skipBulkLoad: false
+      testLengthMinutes: 2
+      numActiveEntities: 5
+      actionRateMilliseconds: 60000
+      actionRateMaxVarianceMilliseconds: 15000
+      linkPreviewChance: 0.2
+      customEmojiChance: 0.2
+      pprofDelayMinutes: 15
+      pprofLengthSeconds: 240
+      sendReportToMMServer: false
+      resultsServerUrl: ""
+      resultsChannelId: ""
+      resultsUsername: ""
+      resultsPassword: ""
+    grafana:
+      enabled: false
+    jobserver:
+      name: jobserver
+      enabled: false
+      replicaCount: 1
+      service:
+        name: mattermost-app-jobserver
+        type: ClusterIP
+    notifications:
+      # Push proxy must be configured or useHPNS must be true for push noticiations to work.
+      push:
+        enabled: false
+        # Hosted push notification service. Requires an enterprise license.
+        # More details at https://docs.mattermost.com/mobile/mobile-hpns.html.
+        useHPNS: false
+    linkPreviews:
+      enabled: false
+    customEmoji:
+      enabled: true
+    storage:
+      enabled: true
+
+mattermostApp:
+  replicaCount: 1
+  image:
+    repository: mattermost/mattermost-enterprise-edition
+    tag: 5.1.1
+
+  service:
+    name: mattermost-app
+    type: ClusterIP
+    externalPort: 8065
+    internalPort: 8065
+    metricsPort: 8067
+    clusterPort: 8075
+    gossipPort: 8074
+    metricsName: mattermost-app-metrics
+
+  ingress:
+    enabled: true
+    # Used to create Ingress record (should used with service.type: ClusterIP).
+    hosts:
+      - mattermost.sandbox.fravega.com
+    tls:
+      # Secrets must be manually created in the namespace.
+       - secretName: sandbox-fravega-com-tls
+         hosts:
+           - mattermost.sandbox.fravega.com
+
+  resources: 
+     limits:
+       cpu: 900m
+       memory: 1200Mi
+     requests:
+       cpu: 300m
+       memory: 500Mi
+
+mysqlha:
+  enabled: false
+  mysqlha:
+    replicaCount: 2
+    mysqlRootPassword: "rootpasswd"
+    mysqlUser: "mmuser"
+    mysqlPassword: "passwd"
+    mysqlDatabase: "mattermost"
+    configFiles:
+      master.cnf: |
+        [mysqld]
+        log-bin
+        skip_name_resolve
+      slave.cnf: |
+        [mysqld]
+        super-read-only
+        skip_name_resolve
+        slave_parallel_workers = 100
+        slave_parallel_type = LOGICAL_CLOCK
+  persistence:
+    ## If defined, storageClassName: <storageClass>
+    ## If set to "-", storageClassName: "", which disables dynamic provisioning
+    ## If undefined (the default) or set to null, no storageClassName spec is
+    ##   set, choosing the default provisioner.  (gp2 on AWS, azure-disk on
+    ##   Azure, standard on GKE, AWS & OpenStack)
+    ##
+    # storageClass: "-"
+    ## Enable persistence using Persistent Volume Claims
+    ## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+    ##
+    ## See: https://github.com/kubernetes/charts/tree/master/incubator/mysqlha
+    enabled: false
+    size: 10Gi
+
+mattermost-elasticsearch:
+  client:
+    replicaCount: 2
+  master:
+    replicaCount: 3
+  data:
+    replicaCount: 2
+
+mattermost-push-proxy:
+  replicaCount: 1
+  applePushSettings:
+    apple:
+      configMap: "apple-cert-path"
+      privateCert: ""
+      privateCertPassword: ""
+      pushTopic: "com.mattermost.Mattermost"
+    apple_rn:
+      configMap: "apple-rn-cert-path"
+      privateCert: ""
+      privateCertPassword: ""
+      pushTopic: "com.mattermost.react.native"
+    apple_rnbeta:
+      configMap: "apple-rnbeta-cert-path"
+      privateCert: ""
+      privateCertPassword: ""
+      pushTopic: ""
+  androidPushSettings:
+    android:
+      apiKey: ""
+    android_rn:
+      apiKey: ""
+
+minio:
+  image:
+    repository: minio/minio
+    tag: RELEASE.2018-07-10T01-42-11Z
+    pullPolicy: IfNotPresent
+  mcImage:
+    repository: minio/mc
+    tag: RELEASE.2018-06-09T02-18-09Z
+    pullPolicy: IfNotPresent
+  mode: standalone
+  priorityClassName: ""
+  accessKey: "mattermostadmin"
+  secretKey: "mattermostadmin"
+  configPath: "/root/.minio/"
+  mountPath: "/export"
+  replicas: 1
+
+  persistence:
+    enabled: true
+    ## A manually managed Persistent Volume and Claim
+    ## Requires persistence.enabled: true
+    ## If defined, PVC must be created manually before volume will be bound
+    # existingClaim:
+
+    ## minio data Persistent Volume Storage Class
+    ## If defined, storageClassName: <storageClass>
+    ## If set to "-", storageClassName: "", which disables dynamic provisioning
+    ## If undefined (the default) or set to null, no storageClassName spec is
+    ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+    ##   GKE, AWS & OpenStack)
+    ##
+    ## Storage class of PV to bind. By default it looks for standard storage class.
+    ## If the PV uses a different storage class, specify that here.
+    storageClass:
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  ## If subPath is set mount a sub folder of a volume instead of the root of the volume.
+  ## This is especially handy for volume plugins that don't natively support sub mounting (like glusterfs).
+  ##
+  subPath: ""
+
+  service:
+    type: ClusterIP
+    clusterIP: None
+    port: 9000
+    # nodePort: 31311
+    annotations:
+      prometheus.io/scrape: 'true'
+      prometheus.io/path:   '/minio/prometheus/metrics'
+      prometheus.io/port:   '9000'
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+
+  defaultBucket:
+    enabled: true
+    name: bucket
+    policy: none
+    purge: false
+
+  ## https://docs.minio.io/docs/minio-bucket-notification-guide
+  ## https://github.com/minio/minio/blob/master/docs/config
+  minioConfig:
+    region: ""
+    browser: "off"
+    domain: ""
+    worm: "off"
+    storageClass:
+      standardStorageClass: ""
+      reducedRedundancyStorageClass: ""
+    cache:
+      drives: []
+      expiry: 90
+      maxuse: 80
+      exclude: []
+    aqmp:
+      enable: false
+      url: ""
+      exchange: ""
+      routingKey: ""
+      exchangeType: ""
+      deliveryMode: 0
+      mandatory: false
+      immediate: false
+      durable: false
+      internal: false
+      noWait: false
+      autoDeleted: false
+    nats:
+      enable: false
+      address: ""
+      subject: ""
+      username: ""
+      password: ""
+      token: ""
+      secure: false
+      pingInterval: 0
+      enableStreaming: false
+      clusterID: ""
+      clientID: ""
+      async: false
+      maxPubAcksInflight: 0
+    elasticsearch:
+      enable: false
+      format: "namespace"
+      url: ""
+      index: ""
+    redis:
+      enable: false
+      format: "namespace"
+      address: ""
+      password: ""
+      key: ""
+    postgresql:
+      enable: false
+      format: "namespace"
+      connectionString: ""
+      table: ""
+      host: ""
+      port: ""
+      user: ""
+      password: ""
+      database: ""
+    kafka:
+      enable: false
+      brokers: "null"
+      topic: ""
+    webhook:
+      enable: false
+      endpoint: ""
+    mysql:
+      enable: false
+      format: "namespace"
+      dsnString: ""
+      table: ""
+      host: ""
+      port: ""
+      user: ""
+      password: ""
+      database: ""
+    mqtt:
+      enable: false
+      broker: ""
+      topic: ""
+      qos: 0
+      clientId: ""
+      username: ""
+      password: ""
+      reconnectInterval: 0
+      keepAliveInterval: 0
+  networkPolicy:
+    enabled: false
+    allowExternal: true
+
+# See https://github.com/kubernetes/charts/tree/master/stable/prometheus#configuration
+# for more configuration options
+prometheus:
+  enabled: false
+  alertmanager:
+    enabled: false
+    ingress:
+      enabled: false
+  configmapReload:
+    name: configmap-reload
+  kubeStateMetrics:
+    enabled: false
+  nodeExporter:
+    enabled: false
+  pushgateway:
+    enabled: false
+  rbac:
+    # Set to true if your Kubernetes cluster has RBAC enabled
+    create: true
+  server:
+    name: server
+    ingress:
+      enabled: false
+    persistentVolume:
+      enabled: false
+    replicaCount: 1
+    service:
+      servicePort: 9090
+  serviceAccounts:
+    alertmanager:
+      create: false
+    kubeStateMetrics:
+      create: false
+    nodeExporter:
+      create: false
+    pushgateway:
+      create: false
+  serverFiles:
+    prometheus.yml:
+      global:
+        scrape_interval: 15s
+      rule_files:
+        - /etc/config/rules
+        - /etc/config/alerts
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets:
+              - localhost:9090
+        - job_name: 'mattermost-app'
+          scrape_interval: 5s
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: true
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: (.+)
+            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: replace
+              regex: (.+):(?:\d+);(\d+)
+              replacement: ${1}:${2}
+              target_label: __address__
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__meta_kubernetes_namespace]
+              action: replace
+              target_label: kubernetes_namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              action: replace
+              #regex: __meta_kubernetes_pod_label_app(.*)
+              target_label: kubernetes_pod_name
